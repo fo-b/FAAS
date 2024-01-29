@@ -1,9 +1,9 @@
+# main.py
 import threading
 import paho.mqtt.client as mqtt
-import time
 from databasesetup import create_database, load_thermostat_values
 from flask import Flask
-from web_app import app, set_lights_state
+from web_app import app, set_lights_state, set_thermostat_temperature
 
 # MQTT topics for devices
 LIGHTS_TOPIC = "smart_home/lights"
@@ -30,18 +30,16 @@ def on_message(client, userdata, msg):
         lights_state = "on" if lights_state_bool else "off"
         set_lights_state(lights_state)  # Pass lights_state to the Flask app
 
-
     elif msg.topic == THERMOSTAT_TOPIC:
         # Update thermostat temperature
-        thermostat_temperature = float(msg.payload)
+        new_temperature = float(msg.payload)
+        thermostat_temperature = new_temperature
+        set_thermostat_temperature(new_temperature)  # Update Flask app attribute
 
-        # Check if thermostat temperature is in the database
+        # Check if thermostat temperature is in the database    
         thermostat_values = load_thermostat_values()
-        if thermostat_temperature in thermostat_values:
-            description = thermostat_values[thermostat_temperature]
-            print(f"{description}")
-        else:
-            print("No description for the current thermostat temperature.")
+        description = thermostat_values.get(thermostat_temperature, "No description available")
+        print(f"{description}")
 
 # Create MQTT client
 client = mqtt.Client()
@@ -59,6 +57,7 @@ def mqtt_thread():
 mqtt_thread = threading.Thread(target=mqtt_thread)
 mqtt_thread.start()
 
-# Start Flask application
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    app.config['lights_state'] = lights_state
+    app.config['thermostat_temperature'] = thermostat_temperature
+    app.run(host="0.0.0.0", port=4000)
